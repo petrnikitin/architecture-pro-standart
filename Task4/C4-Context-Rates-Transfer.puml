@@ -1,0 +1,30 @@
+@startuml C4_Context_Rates_Transfer
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C4 Context: Передача ставок депозитов в кол-центры
+
+Person(operator_internal, "Оператор внутреннего кол-центра", "Консультирует клиентов банка по телефону")
+Person(operator_partner, "Оператор партнёрского кол-центра", "Консультирует клиентов партнёра по телефону")
+
+System(callcenter_system, "Система кол-центра", "Внутренняя система для операторов банка. Отображает информацию о клиентах и продуктах.")
+
+System(deposit_system, "Система открытия депозитов", "Новая система для онлайн подачи заявок на депозиты. Включает Сервис ставок.")
+
+System(sftp_system, "SFTP-сервер", "Сервер для обмена файлами со внешними партнёрами.")
+
+System_Ext(partner_system, "Система партнёрского кол-центра", "Внешняя система партнёра. Работает только с файлами.")
+
+System_Ext(abs_system, "АБС", "Автоматизированная банковская система. Хранит данные о ставках депозитов.")
+
+Rel(operator_internal, callcenter_system, "Консультирует клиентов по ставкам")
+Rel(callcenter_system, deposit_system, "Запрашивает актуальные ставки", "REST API, HTTPS, JSON")
+
+Rel(operator_partner, partner_system, "Консультирует клиентов по файлу со ставками")
+Rel(partner_system, sftp_system, "Забирает файл со ставками", "SFTP, SSH")
+
+Rel(deposit_system, sftp_system, "Размещает файл со ставками", "SFTP, SSH, CSV")
+Rel(deposit_system, abs_system, "Читает актуальные ставки", "REST API, HTTPS, JSON")
+
+SHOW_LEGEND()
+
+@enduml

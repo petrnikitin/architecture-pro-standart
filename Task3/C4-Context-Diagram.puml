@@ -1,0 +1,30 @@
+@startuml C4_Context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Диаграмма контекста: Система открытия депозитов (MVP)
+
+Person(client_new, "Новый клиент", "Потенциальный клиент банка, хочет открыть депозит")
+Person(client_existing, "Существующий клиент", "Клиент банка с действующим счетом")
+Person(backoffice, "Менеджер бэк-офиса депозитов", "Обрабатывает заявки на депозиты")
+Person(backoffice_credit, "Менеджер бэк-офиса кредитования", "Управляет ставками депозитов")
+
+System(deposit_system, "Система открытия депозитов", "Позволяет клиентам подавать заявки на депозиты онлайн, а менеджерам обрабатывать их и управлять ставками")
+
+System_Ext(abs, "АБС (Автоматизированная банковская система)", "Ядро банка. Учет операций, открытие счетов, управление клиентами")
+System_Ext(callcenter, "Система кол-центра", "CRM для обработки обращений клиентов")
+System_Ext(sms_gateway, "СМС-шлюз", "Отправка СМС-уведомлений клиентам")
+System_Ext(email, "Email-система", "Отправка email-уведомлений")
+
+Rel(client_new, deposit_system, "Просматривает депозиты, подает заявку", "HTTPS")
+Rel(client_existing, deposit_system, "Просматривает депозиты, подает заявку, подтверждает СМС", "HTTPS")
+Rel(backoffice, deposit_system, "Обрабатывает заявки, подтверждает условия", "HTTPS")
+Rel(backoffice_credit, deposit_system, "Управляет ставками депозитов", "HTTPS")
+
+Rel(deposit_system, abs, "Создает заявки, открывает депозиты, получает данные клиентов", "REST API / DB")
+Rel(deposit_system, callcenter, "Передает заявки с сайта", "REST API")
+Rel(deposit_system, sms_gateway, "Отправляет СМС-коды и уведомления", "REST API")
+Rel(deposit_system, email, "Отправляет email-уведомления", "SMTP")
+
+@enduml

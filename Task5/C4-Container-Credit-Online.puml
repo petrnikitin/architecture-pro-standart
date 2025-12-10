@@ -1,0 +1,90 @@
+@startuml C4_Container_Credit_Online
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Container: Онлайн подача заявок на кредиты (детализация)
+
+Person(new_client, "Новый клиент", "Подаёт заявку через сайт")
+Person(existing_client, "Существующий клиент", "Подаёт заявку через интернет-банк")
+Person(manager_credit, "Менеджер бэк-офиса кредитов", "Обрабатывает заявки")
+Person(manager_callcenter, "Менеджер кол-центра", "Консультирует клиентов")
+
+System_Boundary(frontend_boundary, "Frontend") {
+    Container(website_spa, "Сайт банка", "React SPA", "Отображает форму заявки на кредит, список продуктов")
+
+    Container(internet_bank_app, "Интернет-банк", "ASP.NET MVC 4.5 (Monolith)", "Личный кабинет клиента, отображает предодобренные предложения")
+}
+
+System_Boundary(backend_boundary, "Backend (Микросервисы)") {
+    Container(api_gateway, "API Gateway", "Kong/Nginx", "Единая точка входа, аутентификация OAuth 2.0, rate limiting")
+
+    Container(credit_service, "Сервис кредитов", ".NET Core Web API", "Обрабатывает заявки на кредиты, управляет предодобренными предложениями, интегрируется со скорингом")
+
+    ContainerDb(credit_db, "База данных кредитов", "MS SQL Server", "Хранит заявки, предодобренные предложения, кэш скоринга")
+
+    Container(rates_service, "Сервис ставок", ".NET Core Web API", "Управляет ставками кредитов, предоставляет данные для расчётов")
+}
+
+System_Boundary(infrastructure_boundary, "Infrastructure") {
+    ContainerDb(redis, "Redis Cache", "In-Memory DB", "Кэширование справочных данных (продукты, ставки) - TTL 1 час")
+
+    ContainerQueue(rabbitmq, "RabbitMQ", "Message Broker", "Асинхронная обработка: СМС-уведомления, события для Кредитного конвейера, логирование")
+
+    Container(sms_gateway, "СМС-шлюз", "Integration Service", "Отправка СМС-кодов для подтверждения, СМС-уведомлений о статусе")
+}
+
+System_Boundary(callcenter_boundary, "Система кол-центра") {
+    Container(callcenter_app, "Система кол-центра", ".NET Application", "Отображает информацию о заявках для операторов")
+}
+
+System_Boundary(external_boundary, "Внешние системы") {
+    Container_Ext(scoring_system, "Система скоринга", "REST API", "Оценка кредитоспособности через БКИ")
+
+    Container_Ext(bki_system, "БКИ", "External REST API", "Бюро кредитных историй")
+
+    Container_Ext(credit_pipeline, "Кредитный конвейер", "Enterprise System", "Обработка всех кредитных заявок банка")
+
+    ContainerDb_Ext(abs_db, "Oracle БД АБС", "Oracle Database", "Мастер-данные клиентов, кредитные договоры")
+}
+
+' Client interactions
+Rel(new_client, website_spa, "Заполняет форму заявки")
+Rel(existing_client, internet_bank_app, "Просматривает предложения, подаёт заявку")
+
+' Frontend to Gateway
+Rel(website_spa, api_gateway, "POST /api/credits/applications", "HTTPS, JSON")
+Rel(internet_bank_app, api_gateway, "GET /api/credits/pre-approved, POST /api/credits/applications", "HTTPS, JSON")
+
+' Gateway to Services
+Rel(api_gateway, credit_service, "Маршрутизирует запросы", "HTTPS, OAuth 2.0/JWT")
+Rel(api_gateway, rates_service, "Запрашивает ставки кредитов", "HTTPS")
+
+' Credit Service integrations
+Rel(credit_service, credit_db, "Сохраняет заявки, читает кэш", "EF Core, SQL")
+Rel(credit_service, redis, "Кэширует справочные данные", "Redis Protocol")
+Rel(credit_service, rabbitmq, "Публикует события", "AMQP")
+Rel(credit_service, scoring_system, "Запрашивает скоринг (rate limit 100 req/min)", "REST API, HTTPS")
+Rel(credit_service, sms_gateway, "Отправляет СМС-коды", "REST API")
+
+' Rates Service
+Rel(rates_service, redis, "Кэширует ставки", "Redis Protocol")
+Rel(rates_service, abs_db, "Читает ставки кредитов", "REST API через АБС Integration")
+
+' Scoring integration
+Rel(scoring_system, bki_system, "Проверяет кредитную историю", "REST API, HTTPS")
+
+' RabbitMQ consumers
+Rel(rabbitmq, credit_pipeline, "Отправляет событие CreditApplicationCreated", "AMQP")
+Rel(rabbitmq, sms_gateway, "Отправляет задачи на СМС-уведомления", "AMQP")
+
+' Credit Pipeline
+Rel(manager_credit, credit_pipeline, "Обрабатывает заявки")
+Rel(credit_pipeline, credit_service, "Обновляет статус заявки", "REST API, HTTPS")
+Rel(credit_pipeline, abs_db, "Создаёт кредитный договор", "SQL")
+
+' Call center
+Rel(manager_callcenter, callcenter_app, "Консультирует клиентов")
+Rel(callcenter_app, api_gateway, "GET /api/credits/applications/{id}", "HTTPS, OAuth 2.0")
+
+SHOW_LEGEND()
+
+@enduml
