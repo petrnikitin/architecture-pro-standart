@@ -1,0 +1,49 @@
+@startuml C4_Context_Credit_Online
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C4 Context: Онлайн подача заявок на кредиты
+
+Person(new_client, "Новый клиент", "Подаёт заявку на кредит через сайт")
+Person(existing_client, "Существующий клиент", "Подаёт заявку через интернет-банк")
+Person(manager_credit, "Менеджер бэк-офиса кредитов", "Обрабатывает кредитные заявки")
+Person(manager_branch, "Менеджер отделения", "Завершает оформление кредита")
+Person(manager_callcenter, "Менеджер кол-центра", "Консультирует клиентов по заявкам")
+
+System(website, "Сайт банка", "Публичный сайт для новых клиентов. Предоставляет информацию о продуктах и форму подачи заявки на кредит.")
+
+System(internet_bank, "Интернет-банк", "Личный кабинет для существующих клиентов. Отображает предодобренные кредитные предложения.")
+
+System(credit_system, "Сервис кредитов", "Новая система для онлайн подачи заявок на кредиты. Обрабатывает заявки, интегрируется со скорингом и Кредитным конвейером.")
+
+System_Ext(scoring_system, "Система скоринга", "Оценивает кредитоспособность клиентов на основе внутренних данных и БКИ.")
+
+System_Ext(bki_system, "БКИ", "Бюро кредитных историй. Внешний сервис для проверки кредитной истории клиентов.")
+
+System_Ext(credit_pipeline, "Кредитный конвейер", "Система обработки всех кредитных заявок банка. Используется менеджерами бэк-офиса.")
+
+System_Ext(abs_system, "АБС", "Автоматизированная банковская система. Хранит данные клиентов и кредитные договоры.")
+
+System(callcenter_system, "Система кол-центра", "Система для операторов кол-центра. Интеграция с Сервисом кредитов для консультаций.")
+
+Rel(new_client, website, "Заполняет форму заявки на кредит")
+Rel(website, credit_system, "Отправляет заявку", "REST API, HTTPS, JSON")
+
+Rel(existing_client, internet_bank, "Просматривает предодобренные предложения, подаёт заявку")
+Rel(internet_bank, credit_system, "Запрашивает предложения, отправляет заявку", "REST API, HTTPS, JSON")
+
+Rel(credit_system, scoring_system, "Запрашивает скоринг клиента", "REST API, HTTPS, JSON")
+Rel(scoring_system, bki_system, "Проверяет кредитную историю", "REST API, HTTPS")
+
+Rel(credit_system, credit_pipeline, "Отправляет заявку на обработку", "REST API + RabbitMQ")
+
+Rel(manager_credit, credit_pipeline, "Обрабатывает заявки, принимает решения")
+Rel(credit_pipeline, abs_system, "Создаёт кредитный договор", "REST API")
+
+Rel(manager_branch, abs_system, "Завершает оформление кредита в отделении")
+
+Rel(manager_callcenter, callcenter_system, "Консультирует клиентов")
+Rel(callcenter_system, credit_system, "Запрашивает информацию о заявках", "REST API, HTTPS, JSON")
+
+SHOW_LEGEND()
+
+@enduml

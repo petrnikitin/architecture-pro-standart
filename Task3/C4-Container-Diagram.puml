@@ -1,0 +1,84 @@
+@startuml C4_Container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_TOP_DOWN()
+
+title Диаграмма контейнеров: Система открытия депозитов (MVP)
+
+Person(client_new, "Новый клиент")
+Person(client_existing, "Существующий клиент")
+Person(backoffice, "Менеджер бэк-офиса")
+
+System_Boundary(website_boundary, "Канальный уровень") {
+    Container(website, "Веб-сайт банка", "PHP + React.js", "Информация о депозитах, форма подачи заявки")
+    Container(web_app, "Web Application", "React.js SPA", "Интерфейс интернет-банка")
+}
+
+System_Boundary(ib_boundary, "Интернет-банк (Микросервисы)") {
+    Container(api_gateway, "API Gateway", "Kong / Nginx", "Единая точка входа, rate limiting, аутентификация")
+    Container(deposit_service, "Deposit Service", ".NET Core", "Бизнес-логика депозитов, управление заявками")
+    Container(rates_service, "Rates Service", ".NET Core", "Управление ставками депозитов")
+    Container(notification_service, "Notification Service", ".NET Core", "Отправка уведомлений")
+    Container(integration_service, "Integration Service", ".NET Core", "Интеграция с АБС")
+
+    ContainerDb(redis, "Redis Cache", "Redis", "Кэширование ставок и справочных данных")
+    ContainerQueue(rabbitmq, "Message Queue", "RabbitMQ", "Асинхронная обработка уведомлений")
+    ContainerDb(deposits_db, "Deposits DB", "MS SQL", "Заявки на депозиты")
+}
+
+System_Boundary(abs_boundary, "АБС (Legacy)") {
+    Container(abs_api, "ABS API Layer", "REST API", "Новый API-слой для legacy-системы")
+    Container(abs_core, "ABS Core Logic", "Delphi + PL/SQL", "Ядро АБС, бизнес-логика")
+    Container(abs_deposit_module, "Deposit Processing", "PL/SQL", "Открытие депозитов")
+    Container(abs_client_module, "Client Management", "PL/SQL", "Управление клиентами")
+    ContainerDb(abs_db, "ABS Database", "Oracle", "Основная БД банка")
+    Container(abs_backoffice_ui, "Backoffice Web UI", "Web Interface", "Интерфейс для менеджеров")
+}
+
+System_Ext(callcenter, "Система кол-центра", "CRM")
+System_Ext(sms_gateway, "СМС-шлюз", "Внешний сервис")
+System_Ext(email_system, "Email-система", "Внешний сервис")
+
+' Client connections
+Rel(client_new, website, "Просмотр, подача заявки", "HTTPS")
+Rel(client_existing, web_app, "Использует", "HTTPS")
+
+' Website/WebApp to API Gateway
+Rel(website, api_gateway, "API calls", "HTTPS/JSON")
+Rel(web_app, api_gateway, "API calls", "HTTPS/JSON")
+
+' API Gateway to Services
+Rel(api_gateway, deposit_service, "Маршрутизация", "HTTP/JSON")
+Rel(api_gateway, rates_service, "Маршрутизация", "HTTP/JSON")
+
+' Service interconnections
+Rel(deposit_service, rates_service, "Получает ставки", "HTTP/JSON")
+Rel(deposit_service, integration_service, "Создание заявок", "HTTP/JSON")
+Rel(deposit_service, redis, "Кэширование", "TCP")
+Rel(deposit_service, rabbitmq, "Публикация событий", "AMQP")
+Rel(deposit_service, deposits_db, "Сохранение заявок", "SQL")
+
+Rel(rates_service, redis, "Кэширование ставок", "TCP")
+
+Rel(rabbitmq, notification_service, "Подписка на события", "AMQP")
+Rel(notification_service, sms_gateway, "Отправка СМС", "REST API")
+Rel(notification_service, email_system, "Отправка Email", "SMTP")
+
+' Integration with ABS
+Rel(integration_service, abs_api, "REST API", "HTTP/JSON")
+Rel(abs_api, abs_core, "Internal calls", "")
+Rel(abs_core, abs_deposit_module, "Вызовы процедур", "")
+Rel(abs_core, abs_client_module, "Вызовы процедур", "")
+Rel(abs_deposit_module, abs_db, "SQL запросы", "SQL/PL-SQL")
+Rel(abs_client_module, abs_db, "SQL запросы", "SQL/PL-SQL")
+
+' Backoffice
+Rel(backoffice, abs_backoffice_ui, "Обработка заявок", "HTTPS")
+Rel(abs_backoffice_ui, abs_db, "Прямые запросы", "SQL")
+
+' Website to CallCenter
+Rel(website, callcenter, "Передача заявки", "REST API")
+
+SHOW_LEGEND()
+
+@enduml

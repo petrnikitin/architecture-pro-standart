@@ -1,0 +1,52 @@
+@startuml C4_Container_Rates_Transfer
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C4 Container: Передача ставок депозитов в кол-центры (детализация)
+
+Person(operator_internal, "Оператор внутреннего кол-центра", "Консультирует клиентов банка")
+Person(operator_partner, "Оператор партнёрского кол-центра", "Консультирует клиентов партнёра")
+
+System_Boundary(callcenter_boundary, "Система кол-центра") {
+    Container(callcenter_app, "Система кол-центра", ".NET Application", "Отображает информацию для операторов")
+}
+
+System_Boundary(deposit_boundary, "Система открытия депозитов (MVP)") {
+    Container(api_gateway, "API Gateway", "Kong/Nginx", "Единая точка входа, аутентификация, rate limiting")
+
+    Container(rates_service, "Сервис ставок", ".NET Core Web API", "Предоставляет REST API для получения актуальных ставок депозитов")
+
+    ContainerDb(redis, "Redis Cache", "In-Memory DB", "Кэширование ставок (TTL 5 мин)")
+
+    Container(abs_integration, "Сервис интеграции депозитов АБС", ".NET Core Service", "API для работы с данными АБС + экспорт файлов на SFTP")
+
+    Container(file_exporter, "Rates File Exporter", "Background Service", "Формирует CSV-файл со ставками каждый час")
+
+    Container(sftp_server, "SFTP-сервер", "OpenSSH", "Хранит файлы для партнёров")
+}
+
+System_Boundary(partner_boundary, "Система партнёрского кол-центра") {
+    Container_Ext(partner_app, "Система партнёрского кол-центра", "External System", "Загружает файлы со ставками")
+}
+
+System_Boundary(abs_boundary, "АБС") {
+    ContainerDb_Ext(abs_db, "Oracle БД АБС", "Database", "Хранит мастер-данные о ставках депозитов")
+}
+
+Rel(operator_internal, callcenter_app, "Работает в системе")
+Rel(callcenter_app, api_gateway, "GET /api/rates/deposits", "HTTPS, OAuth 2.0")
+
+Rel(api_gateway, rates_service, "Маршрутизирует запрос", "HTTPS")
+Rel(rates_service, redis, "Проверяет кэш", "Redis Protocol")
+Rel(rates_service, abs_integration, "Запрашивает ставки (при промахе кэша)", "REST API, HTTPS")
+
+Rel(abs_integration, abs_db, "Читает данные о ставках", "SQL Query")
+
+Rel(file_exporter, abs_integration, "Запрашивает ставки для экспорта", "Internal API")
+Rel(file_exporter, sftp_server, "Размещает файл deposit_rates.csv", "SFTP, SSH")
+
+Rel(operator_partner, partner_app, "Работает в системе")
+Rel(partner_app, sftp_server, "Забирает файл со ставками", "SFTP, SSH")
+
+SHOW_LEGEND()
+
+@enduml
